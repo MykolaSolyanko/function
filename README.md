@@ -880,3 +880,152 @@ int main() {
 
 То как видим мы уже не сможем найти просто функцию `func`, а вместо нее есть функция `_Z4funci`. Что это такоеееее?) это назыветься то как С++ представляет имя функции добавляя к имени,дополнительную информацию типа, какой тип параметров, и сколько байт возращаемого значения.
 Благодаря такому представлению имен функций и есть возможность применять перегрузку функций в С++, т.к. в таблице символов она будет иметь другое имя.
+Примеры
+```cpp
+#include <cstdio>
+
+void print(int a, int b) {
+  printf("%s  a = %d, b = %d\n", __PRETTY_FUNCTION__, a, b); 
+}
+
+// не скомпилируеться т.к. тип передачи параметра по значению не играет роли const или не const
+/*void print(const int a, int b) {
+  printf("%s a = %d, b = %d", __func__, a, b); 
+}*/
+
+void print(float a, float b) {
+  printf("%s a = %f, b = %f\n", __PRETTY_FUNCTION__, a, b); 
+}
+
+void print(double a, double b) {
+  printf("%s a = %f, b = %f\n", __PRETTY_FUNCTION__, a, b); 
+}
+
+// для компилятора это будет неоднозначным такое определение
+// т.е. перегрузка невозможна на основе возращаемого значения
+/*long double print(double a, double b) {
+  printf("%s a = %f, b = %f\n", __PRETTY_FUNCTION__, a, b); 
+  return a + b;
+}*/
+
+void default_overload(int x) {
+  printf("%s x = %d\n", __PRETTY_FUNCTION__, x); 
+}
+
+void default_overload(int x, int y = 40) {
+  printf("%s x = %d, y = %d\n", __PRETTY_FUNCTION__, x, y); 
+}
+
+int main(int argc, char const *argv[]) {
+  print(10, 20);
+  print(10.90f, 20.90f);
+  print(10.90, 20.90);
+  /*
+   не скомпилируеться, т.к. компилятор не найдет подходящую перегрузку для этой функции,
+   и он будет предлагать возможные варианты, но если мы уберем перегрузку для вещественных чисел,
+   то компилятор выберит только int используя неявное приведения типа 
+  */
+  // print(10.90, 20);
+  /* 
+    в данном случае компилятор выдст ошибку так не знает какую перегрузку вызвать
+    т.е. возможен вызов как с одим параметром, так и с двумя (неоднозначность)
+    перегрузка с параметром по умолчанию приводит к неоднозначности
+  */
+  // default_overload(40);
+  default_overload(40, 90);
+  return 0;
+}
+
+```
+
+Выше приведена простая перегрузка на основе примитивных типов и передачи аргументов по значению. С приведеного примера можно сделать следующие выводы
+1. Указание константности аргумента при передачи аргумента по значению, не играет роли, т.е. не участвует при перегрузке. Т.к. сточки зрения компилятора эти два аргумента одинаковы.
+2. Возращаемое значение функции не участвует при перегрузки функции, в этом можно убедиться при просмотре таблици символов.
+3. Также функции с параметром по умолчанию могут приводит к неоднозначности, т.е. они не участвуют в перегрузке функции.
+
+Но правила немного меняються при использовании параметров как указателя, так и ссылок.
+Пример
+```cpp
+#include <cstdio>
+
+void print_ref(int& a) {
+  printf("%s a = %d\n", __PRETTY_FUNCTION__, a);
+  ++a;
+}
+
+void print_ref(const int& a) {
+  printf("%s a = %d\n", __PRETTY_FUNCTION__, a);
+}
+
+void print_pointer(const int* a) {
+  if (a != nullptr) {
+    printf("%s a = %d\n", __PRETTY_FUNCTION__, *a);
+  }
+}
+
+// будет ошибка компилятора, т.к. константность указателя не играет роли
+/*
+void print_pointer(const int* const a) {
+  if (a != nullptr) {
+    printf("%s a = %d\n", __PRETTY_FUNCTION__, *a);
+  }
+}*/
+
+void print_pointer(int* a) {
+  if (a != nullptr) {
+    printf("%s a = %d\n", __PRETTY_FUNCTION__, *a);
+    ++*a;
+  }
+}
+
+void print_pointer(int a) {
+  printf("%s a = %d\n", __PRETTY_FUNCTION__, a);
+}
+
+void swap_ptr(int* &ptr1, int* &ptr2) {
+  printf("%s\n", __PRETTY_FUNCTION__);
+  int *tmp_ptr = ptr1;
+  ptr1 = ptr2;
+  ptr2 = tmp_ptr;
+}
+
+void swap_ptr(int** ptr1, int** ptr2) {
+  printf("%s\n", __PRETTY_FUNCTION__);
+  int *tmp_ptr = *ptr1;
+  *ptr1 = *ptr2;
+  *ptr2 = tmp_ptr;
+}
+
+void swap_ptr(int* const * ptr1, int* const * ptr2) {
+  printf("%s\n", __PRETTY_FUNCTION__);
+}
+
+int main(int argc, char const *argv[]) {
+  int a = 1;
+  const int b = 1;
+  print_ref(a);
+  print_ref(a);
+  print_ref(2);
+  print_pointer(&a);
+  print_pointer(&b);
+  print_pointer(0);
+  // получим ошибку, т.к. есть неоднозначность какую функцию вызвать
+  // print_pointer(nullptr);
+
+  int swap_1 = 100;
+  int swap_2 = 40;
+  int *ptr1 = &swap_1;
+  int *ptr2 = &swap_2;
+  swap_ptr(ptr1, ptr2);
+  printf("swap_1 = %d swap_2 = %d\n", *ptr1, *ptr2);
+  swap_ptr(&ptr1, &ptr2);
+  printf("swap_1 = %d swap_2 = %d\n", *ptr1, *ptr2);
+
+  int * const * cptr1 = &ptr1;
+  int * const * cptr2 = &ptr2;
+  swap_ptr(cptr1, cptr2);
+  return 0;
+}
+```
+
+Как видно из примера выше ссылки и указатели есть разные типы при перегрузке. Также стоит быть осторожным с перегрузкой указателя и типом `int` если передавать в качестве аргумента 0, то будет выбран перегрузка c аргументом типа `int` вместо перегрузки с указателем.
